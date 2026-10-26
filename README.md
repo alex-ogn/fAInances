@@ -40,13 +40,7 @@ Settings live in `src/FAInances.Web/appsettings.json` (`MongoDb` connection and 
 dotnet test
 ```
 
-The service tests share one MongoDB through an xUnit collection fixture (`MongoDbFixture`). By default it starts a throwaway `mongo:7` container with Testcontainers, so Docker must be running. To use an existing server instead (e.g. the one from `docker compose up -d`), set a connection string:
-
-```bash
-FAINANCES_TEST_MONGODB=mongodb://localhost:27017 dotnet test
-```
-
-Each run works in its own `fainances_tests_<guid>` database, which is dropped afterwards.
+The service tests share one MongoDB through an xUnit collection fixture (`MongoDbFixture`). It starts a throwaway MongoDB 7 server with [EphemeralMongo](https://github.com/asimmon/ephemeral-mongo), so no Docker or local MongoDB install is needed. The first run downloads the MongoDB binaries from `downloads.mongodb.org` / `fastdl.mongodb.org` and caches them in your local application data directory.
 
 ## REST API
 

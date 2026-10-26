@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Testcontainers.MongoDb" Version="4.16.0" />
+    <PackageReference Include="EphemeralMongo" Version="3.2.0" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
 
