@@ -36,6 +36,14 @@
     </div>
 </section>
 
+@if (items is { Count: > 0 } && charts is not null)
+{
+    <div class="charts">
+        <CategoryPieChart Expenses="charts.ExpensesByCategory" Income="charts.IncomeByCategory" />
+        <DailyTrendChart Daily="charts.Daily" Month="month" />
+    </div>
+}
+
 @if (showForm)
 {
     <section class="card form-card">
@@ -112,6 +120,7 @@
     private DateTime month = FirstOfMonth(DateTime.Today);
     private IReadOnlyList<TransactionListItem>? items;
     private MonthlySummary? summary;
+    private MonthlyCharts? charts;
     private bool showForm;
     private TransactionListItem? editing;
     private string? pendingDeleteId;
@@ -131,6 +140,7 @@
         pendingDeleteId = null;
         items = await TransactionService.GetForMonthAsync(userId, month.Year, month.Month);
         summary = await TransactionService.GetMonthlySummaryAsync(userId, month.Year, month.Month);
+        charts = await TransactionService.GetMonthlyChartsAsync(userId, month.Year, month.Month);
     }
 
     private Task ChangeMonthAsync(int delta)

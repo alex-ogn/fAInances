@@ -47,5 +47,5 @@ The service tests share one MongoDB through an xUnit collection fixture (`MongoD
 All endpoints require the auth cookie.
 
 - `GET/POST /api/categories`, `GET/PUT/DELETE /api/categories/{id}`
-- `GET /api/transactions?year=&month=`, `GET /api/transactions/summary?year=&month=`
+- `GET /api/transactions?year=&month=`, `GET /api/transactions/summary?year=&month=`, `GET /api/transactions/charts?year=&month=`
 - `POST /api/transactions`, `GET/PUT/DELETE /api/transactions/{id}`

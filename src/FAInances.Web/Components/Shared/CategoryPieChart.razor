@@ -1,0 +1,154 @@
+@inject IOptions<FinanceOptions> FinanceOptions
+
+<section class="card chart-card">
+    <div class="chart-head">
+        <h2>By category</h2>
+        <div class="segmented small" role="group" aria-label="Category chart type">
+            <button type="button" class="@(Type == TransactionType.Expense ? "active expense" : null)"
+                    aria-pressed="@(Type == TransactionType.Expense)" @onclick="() => Select(TransactionType.Expense)">Expenses</button>
+            <button type="button" class="@(Type == TransactionType.Income ? "active income" : null)"
+                    aria-pressed="@(Type == TransactionType.Income)" @onclick="() => Select(TransactionType.Income)">Income</button>
+        </div>
+    </div>
+
+    @if (slices.Count == 0)
+    {
+        <p class="empty">No @(Type == TransactionType.Expense ? "expenses" : "income") this month.</p>
+    }
+    else
+    {
+        <div class="pie-body">
+            <svg class="donut" viewBox="0 0 200 200" role="img" aria-label="@AriaLabel">
+                @if (slices.Count == 1)
+                {
+                    var only = slices[0];
+                    <circle class="slice" cx="@Cx" cy="@Cx" r="@F((OuterRadius + InnerRadius) / 2)" fill="none"
+                            stroke="@only.Color" stroke-width="@F(OuterRadius - InnerRadius)"
+                            @onmouseover="() => hovered = 0" @onmouseout="() => hovered = null">
+                        <title>@Describe(only)</title>
+                    </circle>
+                }
+                else
+                {
+                    @for (var i = 0; i < slices.Count; i++)
+                    {
+                        var index = i;
+                        var slice = slices[i];
+                        <path class="slice @(hovered is not null && hovered != index ? "dim" : null)" d="@slice.Path" fill="@slice.Color"
+                              @onmouseover="() => hovered = index" @onmouseout="() => hovered = null">
+                            <title>@Describe(slice)</title>
+                        </path>
+                    }
+                }
+                @* Razor reserves a bare <text> inside code blocks, so the SVG text sits in a <g>. *@
+                @if (hovered is int h && h < slices.Count)
+                {
+                    <g>
+                        <text class="donut-label" x="@Cx" y="84">@Truncate(slices[h].Name)</text>
+                        <text class="donut-value" x="@Cx" y="108">@FormatAmount(slices[h].Amount)</text>
+                        <text class="donut-label" x="@Cx" y="128">@FormatPercent(slices[h].Share)</text>
+                    </g>
+                }
+                else
+                {
+                    <g>
+                        <text class="donut-label" x="@Cx" y="88">Total</text>
+                        <text class="donut-value" x="@Cx" y="112">@FormatAmount(total)</text>
+                        <text class="donut-label" x="@Cx" y="130">@FinanceOptions.Value.Currency</text>
+                    </g>
+                }
+            </svg>
+
+            <ul class="chart-legend">
+                @for (var i = 0; i < slices.Count; i++)
+                {
+                    var index = i;
+                    var slice = slices[i];
+                    <li class="@(hovered is not null && hovered != index ? "dim" : null)"
+                        @onmouseover="() => hovered = index" @onmouseout="() => hovered = null">
+                        <span class="swatch" style="background: @slice.Color"></span>
+                        <span class="legend-name">@slice.Name</span>
+                        <span class="legend-value"><Money Value="@slice.Amount" /></span>
+                        <span class="legend-share muted">@FormatPercent(slice.Share)</span>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+</section>
+
+@code {
+    private const double Cx = 100, OuterRadius = 96, InnerRadius = 62;
+    private const int Palette = 6;
+
+    [Parameter, EditorRequired] public IReadOnlyList<CategoryTotal> Expenses { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<CategoryTotal> Income { get; set; } = [];
+
+    private TransactionType? chosen;
+    private int? hovered;
+    private List<Slice> slices = [];
+    private decimal total;
+
+    /// <summary>Expenses unless the user picked otherwise, or the month only has income.</summary>
+    private TransactionType Type => chosen ?? (Expenses.Count == 0 && Income.Count > 0 ? TransactionType.Income : TransactionType.Expense);
+
+    private string AriaLabel => $"{(Type == TransactionType.Expense ? "Expenses" : "Income")} by category: "
+        + string.Join(", ", slices.Select(Describe));
+
+    protected override void OnParametersSet() => Build();
+
+    private void Select(TransactionType type)
+    {
+        chosen = type;
+        hovered = null;
+        Build();
+    }
+
+    private void Build()
+    {
+        var totals = Type == TransactionType.Expense ? Expenses : Income;
+        total = totals.Sum(t => t.Amount);
+        slices = [];
+
+        var start = 0d;
+        for (var i = 0; i < totals.Count; i++)
+        {
+            var share = total == 0 ? 0 : (double)(totals[i].Amount / total);
+            // The service returns at most Palette categories plus a trailing "Other", which gets a neutral color.
+            var color = i < Palette ? $"var(--chart-{i + 1})" : "var(--chart-other)";
+            slices.Add(new Slice(totals[i].CategoryName, totals[i].Amount, share, color, ArcPath(start, start + share)));
+            start += share;
+        }
+    }
+
+    /// <summary>Donut segment between two fractions of the full turn, starting at 12 o'clock and going clockwise.</summary>
+    private static string ArcPath(double from, double to)
+    {
+        var largeArc = to - from > 0.5 ? 1 : 0;
+        var (ox0, oy0) = Point(OuterRadius, from);
+        var (ox1, oy1) = Point(OuterRadius, to);
+        var (ix1, iy1) = Point(InnerRadius, to);
+        var (ix0, iy0) = Point(InnerRadius, from);
+        return $"M{F(ox0)} {F(oy0)} A{F(OuterRadius)} {F(OuterRadius)} 0 {largeArc} 1 {F(ox1)} {F(oy1)} "
+             + $"L{F(ix1)} {F(iy1)} A{F(InnerRadius)} {F(InnerRadius)} 0 {largeArc} 0 {F(ix0)} {F(iy0)} Z";
+    }
+
+    private static (double X, double Y) Point(double radius, double fraction)
+    {
+        var angle = fraction * 2 * Math.PI - Math.PI / 2;
+        return (Cx + radius * Math.Cos(angle), Cx + radius * Math.Sin(angle));
+    }
+
+    private static string F(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static string FormatPercent(double share) => (share * 100).ToString(share < 0.1 ? "0.#" : "0", CultureInfo.InvariantCulture) + "%";
+
+    private static string FormatAmount(decimal amount) => amount.ToString("N2", CultureInfo.InvariantCulture);
+
+    private static string Truncate(string name) => name.Length <= 16 ? name : name[..15] + "…";
+
+    private string Describe(Slice slice) =>
+        $"{slice.Name}: {FormatAmount(slice.Amount)} {FinanceOptions.Value.Currency} ({FormatPercent(slice.Share)})";
+
+    private record Slice(string Name, decimal Amount, double Share, string Color, string Path);
+}
