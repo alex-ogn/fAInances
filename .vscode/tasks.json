@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/fAInances.sln"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Run web app",
+      "detail": "Starts MongoDB, then runs FAInances.Web on http://localhost:5103",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/src/FAInances.Web", "--launch-profile", "http"],
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeAtBeginning": true,
+          "beginsPattern": "^\\s*Building",
+          "endsPattern": "Now listening on"
+        }
+      },
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "Watch web app",
+      "detail": "Starts MongoDB, then runs FAInances.Web with hot reload",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "--project", "${workspaceFolder}/src/FAInances.Web", "run", "--launch-profile", "http"],
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeAtBeginning": true,
+          "beginsPattern": "^\\s*dotnet watch",
+          "endsPattern": "Now listening on"
+        }
+      },
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    }
+  ]
+}
