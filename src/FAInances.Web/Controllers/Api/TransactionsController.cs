@@ -26,6 +26,13 @@ public class TransactionsController(ITransactionService transactionService) : Co
         return transactionService.GetMonthlySummaryAsync(User.GetUserId(), year ?? today.Year, month ?? today.Month, cancellationToken);
     }
 
+    [HttpGet("charts")]
+    public Task<MonthlyCharts> GetCharts(int? year, int? month, CancellationToken cancellationToken)
+    {
+        var today = DateTime.Today;
+        return transactionService.GetMonthlyChartsAsync(User.GetUserId(), year ?? today.Year, month ?? today.Month, cancellationToken);
+    }
+
     [HttpGet("{id}")]
     public async Task<TransactionResponse> Get(string id, CancellationToken cancellationToken) =>
         TransactionResponse.From(await transactionService.GetByIdAsync(User.GetUserId(), id, cancellationToken));

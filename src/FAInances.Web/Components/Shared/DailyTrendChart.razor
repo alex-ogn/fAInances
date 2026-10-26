@@ -1,0 +1,147 @@
+@inject IOptions<FinanceOptions> FinanceOptions
+
+<section class="card chart-card">
+    <div class="chart-head">
+        <h2>Daily trend</h2>
+        <div class="segmented small" role="group" aria-label="Trend chart style">
+            <button type="button" class="@(asLine ? null : "active")" aria-pressed="@(!asLine)" @onclick="() => asLine = false">Bar</button>
+            <button type="button" class="@(asLine ? "active" : null)" aria-pressed="@asLine" @onclick="() => asLine = true">Line</button>
+        </div>
+    </div>
+
+    <div class="trend" role="img" aria-label="@AriaLabel">
+        <div class="trend-y" aria-hidden="true">
+            @for (var i = 0; i <= ticks; i++)
+            {
+                <span style="bottom: @Pct(100.0 * i / ticks)">@Compact(step * i)</span>
+            }
+        </div>
+
+        <div class="trend-plot">
+            @for (var i = 0; i <= ticks; i++)
+            {
+                <div class="trend-grid @(i == 0 ? "baseline" : null)" style="bottom: @Pct(100.0 * i / ticks)"></div>
+            }
+
+            @if (asLine)
+            {
+                <svg class="trend-lines" viewBox="0 0 @Daily.Count 100" preserveAspectRatio="none" aria-hidden="true">
+                    <polyline class="line income" points="@Points(d => d.Income)" />
+                    <polyline class="line expense" points="@Points(d => d.Expenses)" />
+                    @foreach (var day in Daily)
+                    {
+                        @if (day.Income > 0)
+                        {
+                            <line class="dot-ring" x1="@X(day)" y1="@Y(day.Income)" x2="@X(day)" y2="@Y(day.Income)" />
+                            <line class="dot income" x1="@X(day)" y1="@Y(day.Income)" x2="@X(day)" y2="@Y(day.Income)" />
+                        }
+                        @if (day.Expenses > 0)
+                        {
+                            <line class="dot-ring square" x1="@X(day)" y1="@Y(day.Expenses)" x2="@X(day)" y2="@Y(day.Expenses)" />
+                            <line class="dot expense square" x1="@X(day)" y1="@Y(day.Expenses)" x2="@X(day)" y2="@Y(day.Expenses)" />
+                        }
+                    }
+                </svg>
+            }
+
+            <div class="trend-days" style="grid-template-columns: repeat(@Daily.Count, 1fr)">
+                @foreach (var day in Daily)
+                {
+                    <div class="trend-day @TipSide(day)">
+                        @if (!asLine)
+                        {
+                            <span class="bar income" style="height: @Pct(Height(day.Income))"></span>
+                            <span class="bar expense" style="height: @Pct(Height(day.Expenses))"></span>
+                        }
+                        <div class="trend-tip" aria-hidden="true">
+                            <strong>@Month.AddDays(day.Day - 1).ToString("ddd, d MMM", CultureInfo.InvariantCulture)</strong>
+                            <span><i class="key income"></i>Income <b>@FormatAmount(day.Income)</b></span>
+                            <span><i class="key expense square"></i>Expenses <b>@FormatAmount(day.Expenses)</b></span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="trend-x" style="grid-template-columns: repeat(@Daily.Count, 1fr)" aria-hidden="true">
+            @foreach (var day in Daily)
+            {
+                <span>@(day.Day is 1 or 5 or 10 or 15 or 20 or 25 || day.Day == Daily.Count ? day.Day : null)</span>
+            }
+        </div>
+    </div>
+
+    <ul class="chart-legend inline">
+        <li><span class="key income @(asLine ? "line-key" : null)"></span>Income</li>
+        <li><span class="key expense @(asLine ? "line-key square" : null)"></span>Expenses</li>
+    </ul>
+</section>
+
+@code {
+    private const int MaxTicks = 5;
+
+    [Parameter, EditorRequired] public IReadOnlyList<DailyTotal> Daily { get; set; } = [];
+
+    /// <summary>First day of the month being charted.</summary>
+    [Parameter, EditorRequired] public DateTime Month { get; set; }
+
+    private bool asLine;
+    private decimal step = 1;
+    private int ticks = 1;
+
+    private decimal Top => step * ticks;
+
+    private string AriaLabel =>
+        $"Daily income and expenses for {Month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)}: "
+        + string.Join("; ", Daily.Where(d => d.Income > 0 || d.Expenses > 0)
+            .Select(d => $"day {d.Day} income {FormatAmount(d.Income)}, expenses {FormatAmount(d.Expenses)}"));
+
+    protected override void OnParametersSet()
+    {
+        var max = Daily.Count == 0 ? 0 : Daily.Max(d => Math.Max(d.Income, d.Expenses));
+        // Round the step, then use only as many gridlines as needed to clear the largest value.
+        step = NiceStep(max / MaxTicks);
+        ticks = Math.Max(1, (int)Math.Ceiling(max / step));
+    }
+
+    /// <summary>Rounds a raw tick step up to 1, 2, 2.5 or 5 times a power of ten.</summary>
+    private static decimal NiceStep(decimal raw)
+    {
+        if (raw <= 0)
+            return 1;
+
+        var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)raw)));
+        foreach (var factor in new[] { 1m, 2m, 2.5m, 5m, 10m })
+        {
+            if (factor * magnitude >= raw)
+                return factor * magnitude;
+        }
+        return 10 * magnitude;
+    }
+
+    private double Height(decimal value) => (double)(value / Top) * 100;
+
+    private static string X(DailyTotal day) => F(day.Day - 0.5);
+
+    private string Y(decimal value) => F(100 - Height(value));
+
+    private string Points(Func<DailyTotal, decimal> value) =>
+        string.Join(" ", Daily.Select(d => $"{X(d)},{Y(value(d))}"));
+
+    /// <summary>Shows the tooltip beside the hovered day, on the side with more room, so it never covers that day's marks.</summary>
+    private string TipSide(DailyTotal day) => day.Day <= Daily.Count / 2 ? "tip-right" : "tip-left";
+
+    private static string Compact(decimal value) => value switch
+    {
+        >= 1_000_000 => (value / 1_000_000).ToString("0.#", CultureInfo.InvariantCulture) + "M",
+        >= 1_000 => (value / 1_000).ToString("0.#", CultureInfo.InvariantCulture) + "k",
+        _ => value.ToString("0.##", CultureInfo.InvariantCulture),
+    };
+
+    private string FormatAmount(decimal amount) =>
+        $"{amount.ToString("N2", CultureInfo.InvariantCulture)} {FinanceOptions.Value.Currency}";
+
+    private static string Pct(double value) => F(value) + "%";
+
+    private static string F(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+}

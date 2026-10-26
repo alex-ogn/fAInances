@@ -10,6 +10,12 @@ public interface ITransactionService
 
     Task<MonthlySummary> GetMonthlySummaryAsync(string userId, int year, int month, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Per-category totals (largest first, the tail folded into "Other") for expenses and income,
+    /// plus income/expense totals for every day of the month.
+    /// </summary>
+    Task<MonthlyCharts> GetMonthlyChartsAsync(string userId, int year, int month, CancellationToken cancellationToken = default);
+
     Task<Transaction> GetByIdAsync(string userId, string transactionId, CancellationToken cancellationToken = default);
 
     Task<Transaction> CreateAsync(string userId, TransactionInput input, CancellationToken cancellationToken = default);

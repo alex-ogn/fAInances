@@ -12,6 +12,10 @@ public class TransactionService(MongoDbContext db, ICategoryService categoryServ
     public const int MaxDescriptionLength = 200;
     public const decimal MaxAmount = 1_000_000_000m;
 
+    /// <summary>Categories shown individually in the charts; the rest are folded into "Other".</summary>
+    public const int MaxChartCategories = 6;
+    public const string OtherCategoryName = "Other";
+
     public async Task<IReadOnlyList<TransactionListItem>> GetForMonthAsync(string userId, int year, int month, CancellationToken cancellationToken = default)
     {
         var (from, to) = MonthRange(year, month);
@@ -55,6 +59,49 @@ public class TransactionService(MongoDbContext db, ICategoryService categoryServ
             month,
             TotalIncome: amounts.Where(a => a.Type == TransactionType.Income).Sum(a => a.Amount),
             TotalExpenses: amounts.Where(a => a.Type == TransactionType.Expense).Sum(a => a.Amount));
+    }
+
+    public async Task<MonthlyCharts> GetMonthlyChartsAsync(string userId, int year, int month, CancellationToken cancellationToken = default)
+    {
+        var (from, to) = MonthRange(year, month);
+
+        var transactions = await db.Transactions
+            .Find(t => t.UserId == userId && t.Date >= from && t.Date < to)
+            .Project(t => new { t.Type, t.Amount, t.Date, t.CategoryId })
+            .ToListAsync(cancellationToken);
+
+        var categoryIds = transactions.Select(t => t.CategoryId).Distinct().ToList();
+        var categoryNames = await db.Categories
+            .Find(c => c.UserId == userId && categoryIds.Contains(c.Id))
+            .Project(c => new { c.Id, c.Name })
+            .ToListAsync(cancellationToken);
+        var namesById = categoryNames.ToDictionary(c => c.Id, c => c.Name);
+
+        IReadOnlyList<CategoryTotal> ByCategory(TransactionType type)
+        {
+            var totals = transactions
+                .Where(t => t.Type == type)
+                .GroupBy(t => t.CategoryId)
+                .Select(g => new CategoryTotal(namesById.GetValueOrDefault(g.Key, "(deleted category)"), g.Sum(t => t.Amount)))
+                .OrderByDescending(c => c.Amount)
+                .ThenBy(c => c.CategoryName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (totals.Count <= MaxChartCategories)
+                return totals;
+
+            // Keep the chart readable: the smallest categories share one "Other" slice.
+            return [.. totals.Take(MaxChartCategories), new CategoryTotal(OtherCategoryName, totals.Skip(MaxChartCategories).Sum(c => c.Amount))];
+        }
+
+        var daily = Enumerable.Range(1, DateTime.DaysInMonth(year, month))
+            .Select(day => new DailyTotal(
+                day,
+                Income: transactions.Where(t => t.Date.Day == day && t.Type == TransactionType.Income).Sum(t => t.Amount),
+                Expenses: transactions.Where(t => t.Date.Day == day && t.Type == TransactionType.Expense).Sum(t => t.Amount)))
+            .ToList();
+
+        return new MonthlyCharts(ByCategory(TransactionType.Expense), ByCategory(TransactionType.Income), daily);
     }
 
     public async Task<Transaction> GetByIdAsync(string userId, string transactionId, CancellationToken cancellationToken = default)
