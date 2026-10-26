@@ -1,0 +1,12 @@
+@inject IOptions<FinanceOptions> FinanceOptions
+
+<span class="money">@Sign@Math.Abs(Value).ToString("N2", CultureInfo.InvariantCulture) <span class="currency">@FinanceOptions.Value.Currency</span></span>
+
+@code {
+    [Parameter] public decimal Value { get; set; }
+
+    /// <summary>When true, prefixes "+" or "−" based on the value's sign.</summary>
+    [Parameter] public bool ShowSign { get; set; }
+
+    private string Sign => Value < 0 ? "−" : ShowSign && Value > 0 ? "+" : string.Empty;
+}

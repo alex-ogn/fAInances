@@ -1,0 +1,190 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ITransactionService TransactionService
+
+<PageTitle>Transactions · fAInances</PageTitle>
+
+<div class="page-header">
+    <div class="month-nav">
+        <button type="button" class="btn icon" aria-label="Previous month" @onclick="() => ChangeMonthAsync(-1)">‹</button>
+        <h1>@month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</h1>
+        <button type="button" class="btn icon" aria-label="Next month" @onclick="() => ChangeMonthAsync(1)">›</button>
+        @if (!IsCurrentMonth)
+        {
+            <button type="button" class="btn link" @onclick="GoToCurrentMonthAsync">This month</button>
+        }
+    </div>
+    @if (!showForm)
+    {
+        <button type="button" class="btn primary" @onclick="StartAdd">+ Add transaction</button>
+    }
+</div>
+
+<section class="summary">
+    <div class="card stat">
+        <span class="stat-label">Income</span>
+        <span class="stat-value income"><Money Value="@(summary?.TotalIncome ?? 0)" /></span>
+    </div>
+    <div class="card stat">
+        <span class="stat-label">Expenses</span>
+        <span class="stat-value expense"><Money Value="@(summary?.TotalExpenses ?? 0)" /></span>
+    </div>
+    <div class="card stat">
+        <span class="stat-label">Balance</span>
+        <span class="stat-value @((summary?.Balance ?? 0) < 0 ? "expense" : "")"><Money Value="@(summary?.Balance ?? 0)" ShowSign="true" /></span>
+    </div>
+</section>
+
+@if (showForm)
+{
+    <section class="card form-card">
+        <h2>@(editing is null ? "New transaction" : "Edit transaction")</h2>
+        <TransactionForm @key="editing?.Id" UserId="@userId" Existing="editing" OnSaved="OnSavedAsync" OnCancel="CloseForm" />
+    </section>
+}
+
+@if (error is not null)
+{
+    <div class="alert error">@error</div>
+}
+
+<section class="card list-card">
+    @if (items is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="empty">
+            <p>No transactions in @month.ToString("MMMM", CultureInfo.InvariantCulture).</p>
+            @if (!showForm)
+            {
+                <button type="button" class="btn primary" @onclick="StartAdd">Add your first one</button>
+            }
+        </div>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th class="hide-sm">Description</th>
+                    <th class="num">Amount</th>
+                    <th class="actions-col"><span class="sr-only">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in items)
+                {
+                    <tr @key="item.Id">
+                        <td class="nowrap">@item.Date.ToString("dd MMM", CultureInfo.InvariantCulture)</td>
+                        <td><span class="chip">@item.CategoryName</span></td>
+                        <td class="hide-sm muted">@item.Description</td>
+                        <td class="num @(item.Type == TransactionType.Income ? "income" : "expense")">
+                            <Money Value="@(item.Type == TransactionType.Income ? item.Amount : -item.Amount)" ShowSign="true" />
+                        </td>
+                        <td class="actions-col">
+                            @if (pendingDeleteId == item.Id)
+                            {
+                                <button type="button" class="btn small danger" @onclick="() => DeleteAsync(item.Id)">Delete</button>
+                                <button type="button" class="btn small" @onclick="() => pendingDeleteId = null">Keep</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn small" @onclick="() => StartEdit(item)">Edit</button>
+                                <button type="button" class="btn small" @onclick="() => pendingDeleteId = item.Id">Delete</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = string.Empty;
+    private DateTime month = FirstOfMonth(DateTime.Today);
+    private IReadOnlyList<TransactionListItem>? items;
+    private MonthlySummary? summary;
+    private bool showForm;
+    private TransactionListItem? editing;
+    private string? pendingDeleteId;
+    private string? error;
+
+    private bool IsCurrentMonth => month == FirstOfMonth(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        userId = (await AuthState).User.GetUserId();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        pendingDeleteId = null;
+        items = await TransactionService.GetForMonthAsync(userId, month.Year, month.Month);
+        summary = await TransactionService.GetMonthlySummaryAsync(userId, month.Year, month.Month);
+    }
+
+    private Task ChangeMonthAsync(int delta)
+    {
+        month = month.AddMonths(delta);
+        return LoadAsync();
+    }
+
+    private Task GoToCurrentMonthAsync()
+    {
+        month = FirstOfMonth(DateTime.Today);
+        return LoadAsync();
+    }
+
+    private void StartAdd()
+    {
+        editing = null;
+        showForm = true;
+    }
+
+    private void StartEdit(TransactionListItem item)
+    {
+        editing = item;
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        editing = null;
+    }
+
+    private async Task OnSavedAsync(Transaction saved)
+    {
+        CloseForm();
+        // Jump to the month the transaction belongs to so the user sees it.
+        month = FirstOfMonth(saved.Date);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(string id)
+    {
+        try
+        {
+            await TransactionService.DeleteAsync(userId, id);
+            if (editing?.Id == id)
+                CloseForm();
+            await LoadAsync();
+        }
+        catch (NotFoundException ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private static DateTime FirstOfMonth(DateTime date) => new(date.Year, date.Month, 1);
+}

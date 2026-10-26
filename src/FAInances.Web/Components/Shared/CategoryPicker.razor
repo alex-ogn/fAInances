@@ -1,0 +1,130 @@
+@inject ICategoryService categoryService
+
+@if (categories is null)
+{
+    <p class="muted">Loading categories…</p>
+}
+else
+{
+    <div class="picker-row">
+        <select value="@(Value ?? string.Empty)" @onchange="OnSelectedAsync" aria-label="Category">
+            <option value="">@(categories.Count == 0 ? "No categories yet, create one" : "Select a category…")</option>
+            @foreach (var category in categories)
+            {
+                <option value="@category.Id">@category.Name</option>
+            }
+        </select>
+        @if (!creating)
+        {
+            <button type="button" class="btn" @onclick="StartCreate">+ New category</button>
+        }
+    </div>
+
+    @if (!creating && Selected?.Description is { } description)
+    {
+        <p class="hint">@description</p>
+    }
+
+    @if (creating)
+    {
+        <div class="inline-create">
+            <input @ref="nameInput" placeholder="Category name" maxlength="@CategoryService.MaxNameLength"
+                   @bind="newName" @bind:event="oninput" @onkeyup="OnKeyUpAsync" />
+            <input placeholder="Description (optional)" maxlength="@CategoryService.MaxDescriptionLength"
+                   @bind="newDescription" @bind:event="oninput" @onkeyup="OnKeyUpAsync" />
+            <div class="inline-actions">
+                <button type="button" class="btn primary" disabled="@busy" @onclick="CreateAsync">Add</button>
+                <button type="button" class="btn" @onclick="CancelCreate">Cancel</button>
+            </div>
+        </div>
+        @if (error is not null)
+        {
+            <div class="alert error">@error</div>
+        }
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public string UserId { get; set; } = string.Empty;
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private IReadOnlyList<Category>? categories;
+    private bool creating;
+    private bool focusName;
+    private bool busy;
+    private string newName = string.Empty;
+    private string newDescription = string.Empty;
+    private string? error;
+    private ElementReference nameInput;
+
+    private Category? Selected => categories?.FirstOrDefault(c => c.Id == Value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await categoryService.GetAllAsync(UserId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusName)
+        {
+            focusName = false;
+            await nameInput.FocusAsync();
+        }
+    }
+
+    private Task OnSelectedAsync(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+        return ValueChanged.InvokeAsync(string.IsNullOrEmpty(id) ? null : id);
+    }
+
+    private void StartCreate()
+    {
+        creating = true;
+        focusName = true;
+        error = null;
+    }
+
+    private void CancelCreate()
+    {
+        creating = false;
+        newName = newDescription = string.Empty;
+        error = null;
+    }
+
+    private async Task OnKeyUpAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await CreateAsync();
+        else if (e.Key == "Escape")
+            CancelCreate();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (busy)
+            return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            var created = await categoryService.CreateAsync(UserId, new CategoryInput(newName, newDescription));
+            categories = await categoryService.GetAllAsync(UserId);
+            CancelCreate();
+            await ValueChanged.InvokeAsync(created.Id);
+        }
+        catch (BusinessRuleException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

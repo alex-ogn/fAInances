@@ -1,0 +1,42 @@
+@page "/register"
+@layout AuthLayout
+
+<PageTitle>Create account · fAInances</PageTitle>
+
+<div class="card auth-card">
+    <h1>Create your account</h1>
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert error">@Error</div>
+    }
+
+    <form method="post" action="account/register" class="stack">
+        <AntiforgeryToken />
+
+        <label class="field">
+            <span class="field-label">Name</span>
+            <input name="DisplayName" required maxlength="@UserService.MaxDisplayNameLength" autocomplete="name" autofocus />
+        </label>
+        <label class="field">
+            <span class="field-label">Email</span>
+            <input name="Email" type="email" required autocomplete="email" />
+        </label>
+        <label class="field">
+            <span class="field-label">Password</span>
+            <input name="Password" type="password" required minlength="@UserService.MinPasswordLength" autocomplete="new-password" />
+        </label>
+        <label class="field">
+            <span class="field-label">Confirm password</span>
+            <input name="ConfirmPassword" type="password" required minlength="@UserService.MinPasswordLength" autocomplete="new-password" />
+        </label>
+
+        <button type="submit" class="btn primary block">Create account</button>
+    </form>
+
+    <p class="muted center">Already have an account? <a href="login">Log in</a></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+}

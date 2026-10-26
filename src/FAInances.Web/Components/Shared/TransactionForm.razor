@@ -1,0 +1,116 @@
+@inject ITransactionService transactionService
+
+<div class="form-grid">
+    <div class="field full">
+        <span class="field-label">Type</span>
+        <div class="segmented" role="group" aria-label="Transaction type">
+            <button type="button" class="@(model.Type == TransactionType.Expense ? "active expense" : null)"
+                    @onclick="() => model.Type = TransactionType.Expense">Expense</button>
+            <button type="button" class="@(model.Type == TransactionType.Income ? "active income" : null)"
+                    @onclick="() => model.Type = TransactionType.Income">Income</button>
+        </div>
+    </div>
+
+    <label class="field">
+        <span class="field-label">Amount</span>
+        <input type="number" step="0.01" min="0" placeholder="0.00" @bind="model.Amount" />
+    </label>
+
+    <label class="field">
+        <span class="field-label">Date</span>
+        <input type="date" @bind="model.Date" />
+    </label>
+
+    <div class="field full">
+        <span class="field-label">Category</span>
+        <CategoryPicker UserId="@UserId" @bind-Value="model.CategoryId" />
+    </div>
+
+    <label class="field full">
+        <span class="field-label">Description <span class="muted">(optional)</span></span>
+        <input placeholder="e.g. Weekly groceries" maxlength="@TransactionService.MaxDescriptionLength" @bind="model.Description" />
+    </label>
+</div>
+
+@if (error is not null)
+{
+    <div class="alert error">@error</div>
+}
+
+<div class="form-actions">
+    <button type="button" class="btn" @onclick="OnCancel">Cancel</button>
+    <button type="button" class="btn primary" disabled="@saving" @onclick="SaveAsync">
+        @(Existing is null ? "Add transaction" : "Save changes")
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string UserId { get; set; } = string.Empty;
+
+    /// <summary>Transaction being edited; null when creating a new one.</summary>
+    [Parameter] public TransactionListItem? Existing { get; set; }
+
+    [Parameter] public EventCallback<Transaction> OnSaved { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FormModel model = new();
+    private bool saving;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            model = new FormModel
+            {
+                Type = Existing.Type,
+                Amount = Existing.Amount,
+                Date = Existing.Date,
+                CategoryId = Existing.CategoryId,
+                Description = Existing.Description
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (model.Amount is null)
+        {
+            error = "Please enter an amount.";
+            return;
+        }
+
+        saving = true;
+        error = null;
+        try
+        {
+            var input = new TransactionInput(model.Type, model.Amount.Value, model.Date, model.CategoryId ?? string.Empty, model.Description);
+            var saved = Existing is null
+                ? await transactionService.CreateAsync(UserId, input)
+                : await transactionService.UpdateAsync(UserId, Existing.Id, input);
+            await OnSaved.InvokeAsync(saved);
+        }
+        catch (BusinessRuleException ex)
+        {
+            error = ex.Message;
+        }
+        catch (NotFoundException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private class FormModel
+    {
+        public TransactionType Type { get; set; } = TransactionType.Expense;
+        public decimal? Amount { get; set; }
+        public DateTime Date { get; set; } = DateTime.Today;
+        public string? CategoryId { get; set; }
+        public string? Description { get; set; }
+    }
+}

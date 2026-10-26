@@ -1,0 +1,40 @@
+@page "/login"
+@layout AuthLayout
+
+<PageTitle>Log in · fAInances</PageTitle>
+
+<div class="card auth-card">
+    <h1>Log in</h1>
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert error">@Error</div>
+    }
+
+    <form method="post" action="account/login" class="stack">
+        <AntiforgeryToken />
+        <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+
+        <label class="field">
+            <span class="field-label">Email</span>
+            <input name="Email" type="email" required autocomplete="email" autofocus />
+        </label>
+        <label class="field">
+            <span class="field-label">Password</span>
+            <input name="Password" type="password" required autocomplete="current-password" />
+        </label>
+        <label class="checkbox">
+            <input name="RememberMe" type="checkbox" value="true" /> Keep me logged in
+        </label>
+
+        <button type="submit" class="btn primary block">Log in</button>
+    </form>
+
+    <p class="muted center">No account yet? <a href="register">Create one</a></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+}
