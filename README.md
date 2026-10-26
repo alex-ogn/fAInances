@@ -14,6 +14,7 @@ fAInances is a simple personal finance tracker that helps you understand, contro
 | --- | --- |
 | `src/FAInances.Web` | Web layer: Blazor pages/components, MVC/API controllers, authentication, app wiring |
 | `src/FAInances.Services` | Business layer: entities (`Transaction`, `Category`, `User`), services with the business rules, options, MongoDB access |
+| `tests/FAInances.Services.Tests` | xUnit v3 integration tests for the services, run against a real MongoDB |
 
 ## Running locally
 
@@ -32,6 +33,14 @@ fAInances is a simple personal finance tracker that helps you understand, contro
 3. Open http://localhost:5103, create an account and start adding transactions.
 
 Settings live in `src/FAInances.Web/appsettings.json` (`MongoDb` connection and `Finance:Currency`).
+
+## Running tests
+
+```bash
+dotnet test
+```
+
+The service tests share one MongoDB through an xUnit collection fixture (`MongoDbFixture`). It starts a throwaway MongoDB 7 server with [EphemeralMongo](https://github.com/asimmon/ephemeral-mongo), so no Docker or local MongoDB install is needed. The first run downloads the MongoDB binaries from `downloads.mongodb.org` / `fastdl.mongodb.org` and caches them in your local application data directory.
 
 ## REST API
 
